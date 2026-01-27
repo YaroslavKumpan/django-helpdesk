@@ -8,7 +8,11 @@ class UserProfile(models.Model):
         ("support", "Support"),
     )
 
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="profile"
+    )
 
     role = models.CharField(
         choices=ROLE_CHOICES,
@@ -23,9 +27,32 @@ class UserProfile(models.Model):
 
 
 class SupportRequest(models.Model):
-    pass
+    STATUS_CHOICES = (
+        ("new", "New"),
+        ("at_work", "At Work"),
+        ("closed","Сlosed"),
+        ("rejected","Rejected")
+    )
 
+    user = models.ForeignKey(
+        UserProfile,
+        on_delete=models.CASCADE,
+        related_name="support_requests"
+    )
 
+    title = models.CharField(max_length=255,)
+    description = models.TextField(blank=True, null=True)
+
+    status = models.CharField(
+        choices=STATUS_CHOICES,
+        max_length=20,
+        default="new",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.title} - {self.get_status_display()}"
 
 class SupportMessage(models.Model):
     pass
