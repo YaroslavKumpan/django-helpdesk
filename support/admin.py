@@ -1,18 +1,60 @@
 from django.contrib import admin
+from django.utils import timezone
 from .models import SupportRequest, SupportMessage, UserProfile
 
-class SupportRequestAdmin(admin.ModelAdmin):
-    list_display = ['title', 'status', 'created_at', 'user']  # Показать столбцы
-    search_fields = ['title', 'status']  # Добавить поиск
 
-class SupportMessageAdmin(admin.ModelAdmin):
-    list_display = ['support_request', 'sender', 'created_at']  # Показать столбцы
-    search_fields = ['text']  # Добавить поиск по тексту
-
+@admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ['user', 'role', 'created_at']  # Показать столбцы
+    list_display = ("user", "role")
+    list_filter = ("role",)
 
 
-admin.site.register(SupportRequest, SupportRequestAdmin)
-admin.site.register(SupportMessage, SupportMessageAdmin)
-admin.site.register(UserProfile, UserProfileAdmin)
+@admin.register(SupportRequest)
+class SupportRequestAdmin(admin.ModelAdmin):
+    list_display = ("title", "status", "user", "created_at")
+    list_filter = ("status", "created_at")
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+
+        # Убедимся что у пользователя есть профиль
+        if not hasattr(request.user, "profile"):
+            UserProfile.objects.create(user=request.user, role="user")
+
+        # Пользователь видит только свои заявки
+        if request.user.profile.role == "user":
+            return qs.filter(user=request.user.profile)
+        # Поддержка и админ видят все
+        else:
+            return qs
+
+    def get_fields(self, request, obj=None):
+        """Какие поля показывать в форме редактирования"""
+        if obj:  # Если редактируем существующую заявку
+            # Определяем поля в зависимости от роли
+            if request.user.profile.role == "user":
+                return ["title", "description"]  # Пользователь видит только эти поля
+            else:
+                return ["title", "description", "status"]  # Поддержка видит статус тоже
+        else:  # Если создаем новую заявку
+            return ["title", "description"]  # Все создают заявки одинаково
+
+    def get_readonly_fields(self, request, obj=None):
+        """Поля только для чтения"""
+        if obj:  # При редактировании
+            if request.user.profile.role == "user":
+                return ["status"]  # Пользователь не может менять статус
+        return []
+
+    def save_model(self, request, obj, form, change):
+        """Сохранение заявки"""
+        if not change:  # Если это новая заявка
+            obj.user = request.user.profile  # Назначаем текущего пользователя
+            obj.status = "new"  # Ставим статус "new"
+
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(SupportMessage)
+class SupportMessageAdmin(admin.ModelAdmin):
+    list_display = ("sender", "support_request", "created_at")
