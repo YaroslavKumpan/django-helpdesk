@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "helpdesk-pet-project"
+version = "0.1.0"
+description = "A support system for a pet project"
+authors = ["Yaroslav <yroslavkumpan@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<4.0"
+django = "^4.0"
+djangorestframework = "^3.16.1"
+psycopg2 = "^2.9.11"
+django-email-users = "2.1.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^6.2.5"
