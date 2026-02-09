@@ -4,12 +4,13 @@ version = "0.1.0"
 description = "A support system for a pet project"
 authors = ["Yaroslav <yroslavkumpan@gmail.com>"]
 
+
 [tool.poetry.dependencies]
-python = ">=3.9,<4.0"
-django = "^4.0"
+python = ">=3.10,<4.0"
+django = "5.2"
 djangorestframework = "^3.16.1"
 psycopg2 = "^2.9.11"
-django-email-users = "2.1.0"
+djangorestframework-simplejwt = "^5.5.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^6.2.5"
