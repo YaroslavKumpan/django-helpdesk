@@ -17,12 +17,21 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     )
 
     password = serializers.CharField(write_only=True, validators=[validate_password])
+    password2 = serializers.CharField(write_only=True)
+
+    def validate(self, data):
+        # Проверяем, что пароли совпадают
+        if data["password"] != data["password2"]:
+            raise serializers.ValidationError({"password2": "Пароли должны совпадать."})
+        return data
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'password')
+        fields = ('username', 'email', 'password', 'password2')
+        extra_kwargs = {"password": {"write_only": True}, "password2": {"write_only": True}}
 
     def create(self, validated_data):
+        validated_data.pop("password2")
         # создаем новогопользователя
         user = User.objects.create_user(
             username=validated_data['username'],
@@ -39,9 +48,14 @@ class UserLoginSerializer(serializers.Serializer):
         username = data.get('username')
         password = data.get('password')
 
-        user = authenticate(username=username, password=password)
+        # Проверка существования пользователя
+        user = User.objects.filter(username=username).first()
         if user is None:
-            raise serializers.ValidationError("Invalid credentials.")
+            raise serializers.ValidationError("Неверные учетные данные: пользователь не найден.")
+
+        # Проверка правильности пароля
+        if not user.check_password(password):
+            raise serializers.ValidationError("Неверные учетные данные: неверный пароль.")
 
         # генерим JWT токен
         refresh = RefreshToken.for_user(user)
