@@ -5,6 +5,8 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from .models import UserProfile
+
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     # Валидация уникальности для username и email
@@ -63,3 +65,14 @@ class UserLoginSerializer(serializers.Serializer):
             'refresh': str(refresh),
             'access': str(refresh.access_token),
         }
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = ['id', 'username', 'role', 'is_support']
+        read_only_fields = ['id', 'username', 'is_support']  # is_support — property, только чтение
+
+

@@ -17,10 +17,6 @@ class SupportRequestAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
 
-        # Убедимся что у пользователя есть профиль
-        if not hasattr(request.user, "profile"):
-            UserProfile.objects.create(user=request.user, role="user")
-
         # Пользователь видит только свои заявки
         if request.user.profile.role == "user":
             return qs.filter(user=request.user.profile)
