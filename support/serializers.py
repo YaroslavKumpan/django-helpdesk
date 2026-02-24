@@ -1,12 +1,11 @@
-from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from django.contrib.messages.storage.cookie import MessageSerializer
-from rest_framework import serializers, request
+from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import UserProfile, SupportRequest
+from .models import UserProfile, SupportRequest, SupportMessage
+
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     # Валидация уникальности для username и email
@@ -76,9 +75,37 @@ class UserProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'username', 'is_support']  # is_support — property, только чтение
 
 
+class SupportMessageSerializer(serializers.ModelSerializer):
+    sender = UserProfileSerializer(read_only=True)
+    support_request = serializers.PrimaryKeyRelatedField(
+        queryset=SupportRequest.objects.all()
+    )
+
+    class Meta:
+        model = SupportMessage
+        fields = ['id', 'text', 'read', 'created_at', 'sender', 'support_request']
+        read_only_fields = ['id', 'created_at', 'sender']
+
+    def validate_support_request(self, value):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            raise serializers.ValidationError("Authentication required")
+
+        if not hasattr(request.user, 'profile'):
+            UserProfile.objects.create(user=request.user, role='user')
+
+        if value.user != request.user.profile and not request.user.is_staff:
+            raise serializers.ValidationError("You do not have permission to post in this request.")
+        return value
+
+    def create(self, validated_data):
+        validated_data['sender'] = self.context['request'].user
+        return super().create(validated_data)
+
+
 class SupportRequestSerializer(serializers.ModelSerializer):
-    user - UserProfileSerializer(read_only=True)
-    messages = MessageSerializer(many=True, read_only=True)
+    user = UserProfileSerializer(read_only=True)
+    messages = SupportMessageSerializer(many=True, read_only=True)
 
     class Meta:
         model = SupportRequest
@@ -86,14 +113,16 @@ class SupportRequestSerializer(serializers.ModelSerializer):
             'id', 'title', 'description', 'status',
             'created_at', 'updated_at', 'user', 'messages',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'user']
 
     def create(self, validated_data):
         request = self.context.get('request')
-        if request and hasattr(request, 'user'):
-            validated_data['user'] = request.user
-        else:
+        if not request or not request.user.is_authenticated:
             raise serializers.ValidationError("User must be authenticated")
+        # Убедимся, что профиль существует
+        if not hasattr(request.user, 'profile'):
+            UserProfile.objects.create(user=request.user, role='user')
+        validated_data['user'] = request.user.profile
         return super().create(validated_data)
 
-class SupportMessageSerializer(serializers.ModelSerializer):
+
