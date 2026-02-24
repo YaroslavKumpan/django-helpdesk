@@ -1,9 +1,13 @@
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import viewsets, permissions
 
-from .serializers import UserRegistrationSerializer, UserLoginSerializer
+from .permissions import IsAuthorOrSupport
+from .models import SupportRequest
+from .serializers import UserRegistrationSerializer, UserLoginSerializer, SupportRequestSerializer
 
 
 class UserRegistrationView(APIView):
@@ -21,3 +25,40 @@ class UserLoginView(APIView):
             return Response(serializer.validated_data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class SupportRequestViewSet(viewsets.ModelViewSet):
+    serializer_class = SupportRequestSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAuthorOrSupport]
+
+    def get_queryset(self):
+        user = self.request.user
+        profile = user.profile
+        if profile.role in ["support", "admin"]:
+            return SupportRequest.objects.all()
+        return SupportRequest.objects.filter(user=profile)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+    def update(self, request, *args, **kwargs):
+        profile = request.user.profile
+        if profile.role not in ['support', 'admin']:
+            instance = self.get_object()
+            if 'status' in request.data and request.data['status'] != instance.status:
+                raise PermissionDenied("Вы не можете изменять статус заявки.")
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        profile = request.user.profile
+        if profile.role not in ['support', 'admin']:
+            instance = self.get_object()
+            if 'status' in request.data and request.data['status'] != instance.status:
+                raise PermissionDenied("Вы не можете изменять статус заявки.")
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        profile = request.user.profile
+        if profile.role != 'admin':
+            raise PermissionDenied("Только администратор может удалять заявки.")
+        return super().destroy(request, *args, **kwargs)
