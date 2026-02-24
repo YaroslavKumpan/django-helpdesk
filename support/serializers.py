@@ -1,12 +1,12 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from rest_framework import serializers
+from django.contrib.messages.storage.cookie import MessageSerializer
+from rest_framework import serializers, request
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import UserProfile
-
+from .models import UserProfile, SupportRequest
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     # Валидация уникальности для username и email
@@ -76,3 +76,24 @@ class UserProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'username', 'is_support']  # is_support — property, только чтение
 
 
+class SupportRequestSerializer(serializers.ModelSerializer):
+    user - UserProfileSerializer(read_only=True)
+    messages = MessageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SupportRequest
+        fields = [
+            'id', 'title', 'description', 'status',
+            'created_at', 'updated_at', 'user', 'messages',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            validated_data['user'] = request.user
+        else:
+            raise serializers.ValidationError("User must be authenticated")
+        return super().create(validated_data)
+
+class SupportMessageSerializer(serializers.ModelSerializer):
