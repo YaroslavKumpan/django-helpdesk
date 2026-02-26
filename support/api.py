@@ -27,6 +27,28 @@ class UserLoginView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class SupportRequestViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet для управления заявками в службу поддержки.
+
+    list:
+    Получить список заявок. Для обычного пользователя возвращаются только его заявки,
+    для сотрудников поддержки и администраторов — все заявки.
+
+    create:
+    Создать новую заявку. Автор автоматически устанавливается как текущий пользователь.
+    Статус новой заявки — "new".
+
+    retrieve:
+    Получить детальную информацию о конкретной заявке, включая все сообщения.
+
+    update / partial_update:
+    Обновить заявку. Обычный пользователь может менять только title и description,
+    сотрудник поддержки и администратор могут менять также статус.
+
+    destroy:
+    Удалить заявку. Доступно только администраторам.
+    """
+
     serializer_class = SupportRequestSerializer
     permission_classes = [permissions.IsAuthenticated, IsAuthorOrSupport]
 
@@ -72,9 +94,14 @@ class SupportRequestViewSet(viewsets.ModelViewSet):
     )
     def messages(self, request, pk=None):
         """
-        Эндпоинт для создания сообщения в заявке.
-        POST /api/requests/{id}/messages/
-        """
+    Создать новое сообщение в рамках указанной заявки.
+
+    Параметры запроса (JSON):
+    - text (string, обязательное): Текст сообщения.
+
+    Права доступа:
+    - Только автор заявки или сотрудник поддержки/администратор могут создавать сообщения.
+    """
         support_request = self.get_object()
         data = request.data.copy()
         data["support_request"] = support_request.id
