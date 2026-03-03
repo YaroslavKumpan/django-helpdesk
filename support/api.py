@@ -5,12 +5,16 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import viewsets, permissions
 
+from drf_spectacular.utils import extend_schema
 from .permissions import IsAuthorOrSupport
 from .models import SupportRequest
 from .serializers import UserRegistrationSerializer, UserLoginSerializer, SupportRequestSerializer, \
     SupportMessageSerializer
 
-
+@extend_schema(
+    request=UserRegistrationSerializer,
+    responses={201: {'message': 'Пользователь успешно зарегистрирован!'}}
+)
 class UserRegistrationView(APIView):
     def post(self, request):
         serializer = UserRegistrationSerializer(data=request.data)
@@ -19,6 +23,10 @@ class UserRegistrationView(APIView):
             return Response({"message": "Пользователь успешно зарегистрирован!"}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+@extend_schema(
+    request=UserLoginSerializer,
+    responses={200: {'refresh': 'string', 'access': 'string'}}
+)
 class UserLoginView(APIView):
     def post(self, request):
         serializer = UserLoginSerializer(data=request.data)

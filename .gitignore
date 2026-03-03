@@ -4,6 +4,3 @@ db.sqlite3
 *.log
 __pycache__/
 *.pyc
-
-# Auto Claude data directory
-.auto-claude/
