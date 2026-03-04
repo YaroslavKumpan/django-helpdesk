@@ -2,15 +2,16 @@ import os
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
-from support import routing  # создадим позже
+
+from PetProjectSupport.support import routing
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'helpdesk.settings')
 
 application = ProtocolTypeRouter({
-    'http': get_asgi_application(),  # обычные HTTP запросы
-    'websocket': AuthMiddlewareStack(  # WebSocket с поддержкой авторизации
+    'http': get_asgi_application(),
+    'websocket': AuthMiddlewareStack(
         URLRouter(
-            routing.websocket_urlpatterns  # наши маршруты WebSocket
+            routing.websocket_urlpatterns
         )
     ),
 })
