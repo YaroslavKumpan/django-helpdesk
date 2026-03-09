@@ -17,6 +17,7 @@ python-decouple = "^3.8"
 channels = "^4.3.2"
 channels-redis = "^4.3.0"
 daphne = "^4.2.1"
+django-cors-headers = "^4.9.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^6.2.5"

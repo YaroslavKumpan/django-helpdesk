@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    'corsheaders',
     'channels',
     "rest_framework",
     "rest_framework_simplejwt",
@@ -57,6 +58,7 @@ REST_FRAMEWORK = {
 
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -154,6 +156,13 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }
+
+CORS_ALLOWED_ORIGINS = [
+    "http://127.0.0.1:8001",
+    "http://localhost:8001",
+    "https://127.0.0.1:8001",  # если браузер считает протокол https
+    "https://localhost:8001",
+]
 
 LOGGING = {
     'version': 1,

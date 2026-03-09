@@ -11,7 +11,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.room_id = self.scope["url_route"]["kwargs"]["room_id"]
         self.room_group_name = f"chat_{self.room_id}"
 
-        #logger.info(f"Попытка подключения к комнате {self.room_id}, пользователь {self.scope['user']}")
+        # logger.info(f"Попытка подключения к комнате {self.room_id}, пользователь {self.scope['user']}")
 
         user = self.scope['user']
         if user.is_anonymous:
@@ -35,27 +35,60 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         data = json.loads(text_data)
-        message = data.get('message')
+        message_type = data.get("type", "message")  # по умолчанию тип 'message'
 
-        user = self.scope['user']
-        await self.save_message(user, self.room_id, message)
+        if message_type == "message":
+            # Обычное текстовое сообщение
+            message = data.get("message")
+            user = self.scope["user"]
+            await self.save_message(user, self.room_id, message)
 
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'chat_message',
-                'message': message,
-                'user': user.username,
-                'timestamp': str(timezone.now())
-            }
-        )
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "chat_message",
+                    "message": message,
+                    "user": user.username,
+                    "timestamp": str(timezone.now()),
+                    "sender_channel": self.channel_name,
+                },
+            )
+        elif message_type == "typing":
+            # Событие печати
+            status = data.get("status")  # 'start' или 'stop'
+            user = self.scope["user"]
+            # Отправляем событие всем в группе, но исключая отправителя
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "typing_notification",
+                    "user": user.username,
+                    "status": status,
+                    "sender_channel": self.channel_name,  # идентификатор отправителя
+                },
+            )
+
+    async def typing_notification(self, event):
+        # Этот метод вызывается, когда мы делаем group_send с type='typing_notification'
+        # Проверяем, не отправитель ли это
+        if event["sender_channel"] != self.channel_name:
+            await self.send(
+                text_data=json.dumps(
+                    {"type": "typing", "user": event["user"], "status": event["status"]}
+                )
+            )
 
     async def chat_message(self, event):
-        await self.send(text_data=json.dumps({
-            'message': event['message'],
-            'user': event['user'],
-            'timestamp': event['timestamp']
-        }))
+        if event["sender_channel"] != self.channel_name:
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "message": event["message"],
+                        "user": event["user"],
+                        "timestamp": event["timestamp"],
+                    }
+                )
+            )
 
     @database_sync_to_async
     def check_permission(self, user, room_id):
