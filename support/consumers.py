@@ -2,11 +2,16 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
+import logging
+logger = logging.getLogger(__name__)
 
 class ChatConsumer(AsyncWebsocketConsumer):
+
     async def connect(self):
-        self.room_id = self.scope['url_route']['kwargs']['room_id']
-        self.room_group_name = f'chat_{self.room_id}'
+        self.room_id = self.scope["url_route"]["kwargs"]["room_id"]
+        self.room_group_name = f"chat_{self.room_id}"
+
+        #logger.info(f"Попытка подключения к комнате {self.room_id}, пользователь {self.scope['user']}")
 
         user = self.scope['user']
         if user.is_anonymous:
