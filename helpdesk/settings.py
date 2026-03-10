@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-
+from datetime import timedelta
 from pathlib import Path
 from decouple import config
 
@@ -163,6 +163,19 @@ CORS_ALLOWED_ORIGINS = [
     "https://127.0.0.1:8001",  # если браузер считает протокол https
     "https://localhost:8001",
 ]
+
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,          # при обновлении выдавать новый refresh token
+    'BLACKLIST_AFTER_ROTATION': True,       # старый refresh помечать как недействительный
+    'AUTH_COOKIE': 'refresh_token',          # имя cookie
+    'AUTH_COOKIE_SECURE': False,             # в разработке можно False, в production True (HTTPS)
+    'AUTH_COOKIE_HTTP_ONLY': True,           # запрет доступа из JavaScript
+    'AUTH_COOKIE_PATH': '/',
+    'AUTH_COOKIE_SAMESITE': 'Lax',           # или 'Strict' для большей безопасности
+}
 
 LOGGING = {
     'version': 1,
