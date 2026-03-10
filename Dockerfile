@@ -20,13 +20,17 @@ RUN pip install poetry
 RUN poetry config virtualenvs.create false
 
 # Устанавливаем зависимости
-RUN poetry install --no-interaction --no-ansi
+RUN pip install --upgrade pip setuptools
+RUN pip install poetry
+
+# Отключаем создание виртуального окружения
+RUN poetry config virtualenvs.create false
+
+# Устанавливаем зависимости с подробным выводом
+RUN poetry install --no-interaction --no-ansi -v --no-root
 
 # Копируем весь проект
 COPY . .
-
-# Собираем статические файлы
-RUN python manage.py collectstatic --noinput
 
 # Открываем порт 8000
 EXPOSE 8000
