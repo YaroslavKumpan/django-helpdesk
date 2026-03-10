@@ -1,15 +1,18 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.views import APIView
+from rest_framework.generics import ListAPIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import viewsets, permissions
+from rest_framework.views import APIView
 
-from drf_spectacular.utils import extend_schema
+from .models import SupportRequest, SupportMessage
 from .permissions import IsAuthorOrSupport
-from .models import SupportRequest
 from .serializers import UserRegistrationSerializer, UserLoginSerializer, SupportRequestSerializer, \
     SupportMessageSerializer
+
 
 @extend_schema(
     request=UserRegistrationSerializer,
@@ -119,3 +122,23 @@ class SupportRequestViewSet(viewsets.ModelViewSet):
         serializer.save()
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class SupportMessageListView(ListAPIView):
+    serializer_class = SupportMessageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        request_id = self.kwargs['request_id']
+        try:
+            support_request = SupportRequest.objects.get(id=request_id)
+        except SupportRequest.DoesNotExist:
+            raise PermissionDenied("Заявка не найдена")
+
+        # Проверка прав: пользователь должен иметь доступ к заявке
+        user = self.request.user
+        if not (user.profile.role in ['support', 'admin'] or support_request.user == user.profile):
+            raise PermissionDenied("Нет доступа к этой заявке")
+
+        # Возвращаем последние 50 сообщений, отсортированных по возрастанию даты
+        return SupportMessage.objects.filter(support_request=support_request).order_by('-created_at')[:50]
