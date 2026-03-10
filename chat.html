@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Чат поддержки (с автообновлением токена)</title>
+    <title>Чат поддержки (с автообновлением токена и историей)</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; padding: 0 20px; }
         #messages { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 10px; margin-bottom: 10px; }
@@ -41,8 +41,9 @@
         // ===== НАСТРОЙКИ =====
         const ROOM_ID = 18; // ID заявки
         // ВСТАВЬ СВОЙ РЕФРЕШ ТОКЕН (полученный при логине)
-        let refreshToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3MzIzOTA3MywiaWF0IjoxNzczMTUyNjczLCJqdGkiOiJkOGQ4YmU1OTYzYzE0MmMyOGNiNDBmMGQ1ZTA1ODQ2MSIsInVzZXJfaWQiOiIyIn0.JYNSZNPFyINRUxC_ggNv0b_GqFrlHY8K9ft9tIT6Klo';
-        let accessToken = null; // будет получен при первом обновлении
+        let refreshToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3MzI0MTk4NywiaWF0IjoxNzczMTU1NTg3LCJqdGkiOiJkNGEzNzI2ZTY5MzY0ZjEyODU0ODE2MWZiNWNkYTgyYiIsInVzZXJfaWQiOiIyIn0.OYV1A0mvlr3RXwh_gYaDMt5QMxg11iEdL6p1255aI7A';
+        let accessToken = null;
+        let currentUserId = null; // будет получен из токена
 
         // Для WebSocket
         let socket = null;
@@ -53,7 +54,7 @@
         let typingTimer;
         const TYPING_TIMEOUT = 1000;
 
-        // Функция для декодирования JWT и получения времени истечения
+        // Функция для декодирования JWT и получения payload
         function parseJwt(token) {
             try {
                 const base64Url = token.split('.')[1];
@@ -69,29 +70,55 @@
 
         // Функция обновления access token через refresh
         async function refreshAccessToken() {
-    if (!refreshToken) {
-        console.error('Нет refresh токена');
-        return null;
-    }
-    try {
-        const response = await fetch('http://127.0.0.1:8000/api/token/refresh/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh: refreshToken })
-        });
-        if (!response.ok) {
-            throw new Error('Ошибка обновления токена');
+            if (!refreshToken) {
+                console.error('Нет refresh токена');
+                return null;
+            }
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/token/refresh/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh: refreshToken })
+                });
+                if (!response.ok) {
+                    throw new Error('Ошибка обновления токена');
+                }
+                const data = await response.json();
+                accessToken = data.access;
+                tokenDebug.innerHTML = `Токен обновлён: истекает ${new Date(parseJwt(accessToken).exp * 1000).toLocaleTimeString()}`;
+                // Сохраняем id пользователя из токена
+                currentUserId = parseJwt(accessToken).user_id;
+                return accessToken;
+            } catch (error) {
+                console.error('Не удалось обновить токен:', error);
+                addSystemMessage('⚠️ Ошибка аутентификации. Перезагрузите страницу.');
+                return null;
+            }
         }
-        const data = await response.json();
-        accessToken = data.access;
-        tokenDebug.innerHTML = `Токен обновлён: истекает ${new Date(parseJwt(accessToken).exp * 1000).toLocaleTimeString()}`;
-        return accessToken;
-    } catch (error) {
-        console.error('Не удалось обновить токен:', error);
-        addSystemMessage('⚠️ Ошибка аутентификации. Перезагрузите страницу.');
-        return null;
-    }
-}
+
+        // Функция загрузки истории сообщений
+        async function loadMessageHistory(requestId, token) {
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/requests/${requestId}/messages/`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error('Ошибка загрузки истории');
+                }
+                const messages = await response.json();
+                // Сервер может отдавать последние сообщения первыми, поэтому разворачиваем
+                messages.reverse().forEach(msg => {
+                    // Определяем, своё ли сообщение (сравниваем id отправителя с currentUserId)
+                    const isOwn = msg.sender.id === currentUserId;
+                    addMessage(msg, isOwn);
+                });
+            } catch (error) {
+                console.error('Не удалось загрузить историю:', error);
+                addSystemMessage('⚠️ Не удалось загрузить историю сообщений');
+            }
+        }
 
         // Функция создания WebSocket с текущим accessToken
         function createWebSocket() {
@@ -110,26 +137,24 @@
                 messageInput.disabled = false;
                 sendBtn.disabled = false;
                 addSystemMessage('Соединение установлено');
-                reconnectAttempts = 0; // сброс попыток
+                reconnectAttempts = 0;
             };
 
             socket.onclose = (e) => {
                 statusEl.textContent = '🔴 Отключено';
                 messageInput.disabled = true;
                 sendBtn.disabled = true;
-                // Пытаемся переподключиться, если это не было намеренным закрытием
                 if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
                     reconnectAttempts++;
                     addSystemMessage(`Попытка переподключения (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
                     setTimeout(async () => {
-                        // Перед переподключением обновим токен
                         const newToken = await refreshAccessToken();
                         if (newToken) {
                             createWebSocket();
                         } else {
                             addSystemMessage('Не удалось обновить токен. Перезагрузите страницу.');
                         }
-                    }, 2000 * reconnectAttempts); // увеличиваем задержку
+                    }, 2000 * reconnectAttempts);
                 } else {
                     addSystemMessage('Не удалось восстановить соединение. Перезагрузите страницу.');
                 }
@@ -148,16 +173,22 @@
                         typingIndicator.textContent = '';
                     }
                 } else {
+                    // Обычное сообщение от сервера (всегда чужое, так как свои мы не получаем)
                     addMessage(data, false);
                 }
             };
         }
 
-        // Функция добавления сообщения
+        // Функция добавления сообщения в окно чата
         function addMessage(data, isOwn = false) {
             const msgDiv = document.createElement('div');
             msgDiv.className = 'message ' + (isOwn ? 'own' : 'other');
-            msgDiv.innerHTML = `<strong>${data.user}:</strong> ${data.message} <small style="float:right; color:#999;">${new Date(data.timestamp).toLocaleTimeString()}</small>`;
+            // data может быть от сервера (с полями message, user, timestamp) или от истории (с полями text, sender, created_at)
+            // Унифицируем: если есть поле text, значит это из истории, иначе из WebSocket
+            const messageText = data.text || data.message;
+            const userName = data.sender ? data.sender.username : data.user;
+            const timestamp = data.created_at || data.timestamp;
+            msgDiv.innerHTML = `<strong>${userName}:</strong> ${messageText} <small style="float:right; color:#999;">${new Date(timestamp).toLocaleTimeString()}</small>`;
             messagesEl.appendChild(msgDiv);
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
@@ -176,25 +207,28 @@
             }
         }
 
-        // Инициализация: получаем первый access token по refresh
+        // Инициализация: получаем access token, затем историю, затем WebSocket
         (async function init() {
             roomIdSpan.textContent = ROOM_ID;
             addSystemMessage('Получение токена...');
             const token = await refreshAccessToken();
             if (token) {
+                // Загружаем историю
+                await loadMessageHistory(ROOM_ID, token);
+                // Создаём WebSocket
                 createWebSocket();
+
                 // Запускаем таймер для автоматического обновления токена
                 const payload = parseJwt(token);
                 if (payload && payload.exp) {
-                    const expiresIn = payload.exp * 1000 - Date.now(); // мс
+                    const expiresIn = payload.exp * 1000 - Date.now();
                     const refreshTime = expiresIn - 60000; // за 1 минуту до истечения
                     if (refreshTime > 0) {
                         setTimeout(async () => {
                             console.log('Обновляем токен по таймеру');
                             const newToken = await refreshAccessToken();
                             if (newToken) {
-                                // Переподключаем WebSocket с новым токеном
-                                createWebSocket();
+                                createWebSocket(); // переподключаем с новым токеном
                             }
                         }, refreshTime);
                     }
@@ -229,6 +263,7 @@
             const text = messageInput.value.trim();
             if (text && socket && socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify({message: text}));
+                // Сразу добавляем своё сообщение в чат (чтобы не ждать эха)
                 addMessage({user: 'Я', message: text, timestamp: new Date().toISOString()}, true);
                 messageInput.value = '';
             }

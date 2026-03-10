@@ -1,4 +1,3 @@
-from django.contrib.admin import action
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
@@ -77,7 +76,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 
 class SupportMessageSerializer(serializers.ModelSerializer):
-    sender = UserProfileSerializer(read_only=True)
+    sender = serializers.SerializerMethodField()
     support_request = serializers.PrimaryKeyRelatedField(
         queryset=SupportRequest.objects.all()
     )
@@ -86,6 +85,15 @@ class SupportMessageSerializer(serializers.ModelSerializer):
         model = SupportMessage
         fields = ['id', 'text', 'read', 'created_at', 'sender', 'support_request']
         read_only_fields = ['id', 'created_at', 'sender']
+
+    def get_sender(self, obj):
+        # obj.sender — это объект User
+        return {
+            'id': obj.sender.id,
+            'username': obj.sender.username,
+            'role': obj.sender.profile.role,          # роль из профиля
+            'is_support': obj.sender.profile.is_support,
+        }
 
     def validate_support_request(self, value):
         request = self.context.get('request')

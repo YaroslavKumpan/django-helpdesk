@@ -123,22 +123,24 @@ class SupportRequestViewSet(viewsets.ModelViewSet):
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=["get"], url_path="messages")
+    def get_messages(self, request, pk=None):
+        """
+        Получить историю сообщений для заявки (последние 50).
+        Доступно только автору заявки или поддержке/администратору.
+        """
+        support_request = self.get_object()
+        user = request.user
 
-class SupportMessageListView(ListAPIView):
-    serializer_class = SupportMessageSerializer
-    permission_classes = [IsAuthenticated]
+        # Проверка прав доступа
+        if not (
+            user.profile.role in ["support", "admin"]
+            or support_request.user == user.profile
+        ):
+            return Response({"detail": "Доступ запрещён"}, status=403)
 
-    def get_queryset(self):
-        request_id = self.kwargs['request_id']
-        try:
-            support_request = SupportRequest.objects.get(id=request_id)
-        except SupportRequest.DoesNotExist:
-            raise PermissionDenied("Заявка не найдена")
-
-        # Проверка прав: пользователь должен иметь доступ к заявке
-        user = self.request.user
-        if not (user.profile.role in ['support', 'admin'] or support_request.user == user.profile):
-            raise PermissionDenied("Нет доступа к этой заявке")
-
-        # Возвращаем последние 50 сообщений, отсортированных по возрастанию даты
-        return SupportMessage.objects.filter(support_request=support_request).order_by('-created_at')[:50]
+        messages = support_request.messages.all().order_by("-created_at")[:50]
+        serializer = SupportMessageSerializer(
+            messages, many=True, context={"request": request}
+        )
+        return Response(serializer.data)
