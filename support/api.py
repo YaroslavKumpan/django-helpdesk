@@ -1,3 +1,4 @@
+from django.conf import settings
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework import viewsets, permissions
@@ -144,3 +145,16 @@ class SupportRequestViewSet(viewsets.ModelViewSet):
             messages, many=True, context={"request": request}
         )
         return Response(serializer.data)
+
+class LogoutView(APIView):
+    """
+    Выход из системы: удаляет httpOnly cookie с refresh token.
+    Требуется аутентификация (access token).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        response = Response({"detail": "Successfully logged out."})
+        # Удаляем cookie с refresh token
+        response.delete_cookie(settings.SIMPLE_JWT.get('AUTH_COOKIE'))
+        return response

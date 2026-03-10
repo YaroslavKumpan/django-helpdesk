@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Чат поддержки (с автообновлением токена и историей)</title>
+    <title>Чат поддержки (безопасная аутентификация)</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; padding: 0 20px; }
         #messages { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 10px; margin-bottom: 10px; }
@@ -16,20 +16,48 @@
         button { width: 25%; cursor: pointer; }
         #status { margin-bottom: 10px; font-weight: bold; }
         #tokenDebug { font-size: 12px; color: #999; margin-top: 10px; word-break: break-all; }
+        #loginForm { border: 1px solid #ccc; padding: 20px; margin-bottom: 20px; border-radius: 5px; }
+        #loginForm input { width: 100%; margin-bottom: 10px; box-sizing: border-box; }
+        #loginError { color: red; margin-top: 10px; }
+        #chatContainer { display: none; }
+        #logoutBtn { padding: 4px 8px; font-size: 14px; width: auto; }
     </style>
 </head>
 <body>
-    <h2>Чат поддержки (заявка #<span id="roomIdSpan">?</span>)</h2>
-    <div id="status">🔴 Отключено</div>
-    <div id="messages"></div>
-    <div id="typingIndicator"></div>
-    <input type="text" id="messageInput" placeholder="Введите сообщение..." disabled>
-    <button id="sendBtn" disabled>Отправить</button>
-    <!-- Для отладки (можно удалить) -->
-    <div id="tokenDebug"></div>
+    <h2>Чат поддержки</h2>
+
+    <!-- Форма логина (изначально видна) -->
+    <div id="loginForm">
+        <h3>Вход в чат</h3>
+        <input type="text" id="loginUsername" placeholder="Имя пользователя" autocomplete="off">
+        <input type="password" id="loginPassword" placeholder="Пароль">
+        <button id="loginBtn">Войти</button>
+        <div id="loginError"></div>
+    </div>
+
+    <!-- Контейнер чата (скрыт до успешного входа) -->
+    <div id="chatContainer">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>Заявка #<span id="roomIdSpan">?</span></div>
+            <button id="logoutBtn">Выйти</button>
+        </div>
+        <div id="status">🔴 Отключено</div>
+        <div id="messages"></div>
+        <div id="typingIndicator"></div>
+        <input type="text" id="messageInput" placeholder="Введите сообщение..." disabled>
+        <button id="sendBtn" disabled>Отправить</button>
+        <div id="tokenDebug"></div>
+    </div>
 
     <script>
         // Элементы DOM
+        const loginForm = document.getElementById('loginForm');
+        const loginUsername = document.getElementById('loginUsername');
+        const loginPassword = document.getElementById('loginPassword');
+        const loginBtn = document.getElementById('loginBtn');
+        const loginError = document.getElementById('loginError');
+        const chatContainer = document.getElementById('chatContainer');
+        const logoutBtn = document.getElementById('logoutBtn');
         const statusEl = document.getElementById('status');
         const messagesEl = document.getElementById('messages');
         const messageInput = document.getElementById('messageInput');
@@ -38,23 +66,19 @@
         const typingIndicator = document.getElementById('typingIndicator');
         const tokenDebug = document.getElementById('tokenDebug');
 
-        // ===== НАСТРОЙКИ =====
+        // Константы
         const ROOM_ID = 18; // ID заявки
-        // ВСТАВЬ СВОЙ РЕФРЕШ ТОКЕН (полученный при логине)
-        let refreshToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3MzI0MTk4NywiaWF0IjoxNzczMTU1NTg3LCJqdGkiOiJkNGEzNzI2ZTY5MzY0ZjEyODU0ODE2MWZiNWNkYTgyYiIsInVzZXJfaWQiOiIyIn0.OYV1A0mvlr3RXwh_gYaDMt5QMxg11iEdL6p1255aI7A';
-        let accessToken = null;
-        let currentUserId = null; // будет получен из токена
 
-        // Для WebSocket
+        // Состояние
+        let accessToken = null;
+        let currentUserId = null;
         let socket = null;
         let reconnectAttempts = 0;
         const MAX_RECONNECT_ATTEMPTS = 5;
-
-        // Для индикатора печати
         let typingTimer;
         const TYPING_TIMEOUT = 1000;
 
-        // Функция для декодирования JWT и получения payload
+        // ===== Утилиты =====
         function parseJwt(token) {
             try {
                 const base64Url = token.split('.')[1];
@@ -68,49 +92,58 @@
             }
         }
 
-        // Функция обновления access token через refresh
-        async function refreshAccessToken() {
-            if (!refreshToken) {
-                console.error('Нет refresh токена');
-                return null;
-            }
+        // ===== Логин =====
+        async function login(username, password) {
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/token/refresh/', {
+                const response = await fetch('http://127.0.0.1:8000/api/login/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ refresh: refreshToken })
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include'
                 });
                 if (!response.ok) {
-                    throw new Error('Ошибка обновления токена');
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Ошибка входа');
                 }
                 const data = await response.json();
                 accessToken = data.access;
-                tokenDebug.innerHTML = `Токен обновлён: истекает ${new Date(parseJwt(accessToken).exp * 1000).toLocaleTimeString()}`;
-                // Сохраняем id пользователя из токена
                 currentUserId = parseJwt(accessToken).user_id;
-                return accessToken;
+                return true;
             } catch (error) {
-                console.error('Не удалось обновить токен:', error);
-                addSystemMessage('⚠️ Ошибка аутентификации. Перезагрузите страницу.');
-                return null;
+                console.error('Login error:', error);
+                return false;
             }
         }
 
-        // Функция загрузки истории сообщений
+        loginBtn.addEventListener('click', async () => {
+            const username = loginUsername.value.trim();
+            const password = loginPassword.value;
+            if (!username || !password) {
+                loginError.textContent = 'Заполните оба поля';
+                return;
+            }
+            const success = await login(username, password);
+            if (success) {
+                loginForm.style.display = 'none';
+                chatContainer.style.display = 'block';
+                roomIdSpan.textContent = ROOM_ID;
+                await loadMessageHistory(ROOM_ID, accessToken);
+                createWebSocket();
+                startTokenRefreshTimer();
+            } else {
+                loginError.textContent = 'Неверные данные или ошибка сервера';
+            }
+        });
+
+        // ===== Загрузка истории =====
         async function loadMessageHistory(requestId, token) {
             try {
                 const response = await fetch(`http://127.0.0.1:8000/api/requests/${requestId}/messages/`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (!response.ok) {
-                    throw new Error('Ошибка загрузки истории');
-                }
+                if (!response.ok) throw new Error('Ошибка загрузки истории');
                 const messages = await response.json();
-                // Сервер может отдавать последние сообщения первыми, поэтому разворачиваем
                 messages.reverse().forEach(msg => {
-                    // Определяем, своё ли сообщение (сравниваем id отправителя с currentUserId)
                     const isOwn = msg.sender.id === currentUserId;
                     addMessage(msg, isOwn);
                 });
@@ -120,7 +153,7 @@
             }
         }
 
-        // Функция создания WebSocket с текущим accessToken
+        // ===== WebSocket =====
         function createWebSocket() {
             if (!accessToken) {
                 console.error('Нет access токена');
@@ -152,11 +185,11 @@
                         if (newToken) {
                             createWebSocket();
                         } else {
-                            addSystemMessage('Не удалось обновить токен. Перезагрузите страницу.');
+                            addSystemMessage('Не удалось обновить токен. Перезагрузите страницу или войдите заново.');
                         }
                     }, 2000 * reconnectAttempts);
                 } else {
-                    addSystemMessage('Не удалось восстановить соединение. Перезагрузите страницу.');
+                    addSystemMessage('Не удалось восстановить соединение. Перезагрузите страницу или войдите заново.');
                 }
             };
 
@@ -173,22 +206,59 @@
                         typingIndicator.textContent = '';
                     }
                 } else {
-                    // Обычное сообщение от сервера (всегда чужое, так как свои мы не получаем)
                     addMessage(data, false);
                 }
             };
         }
 
-        // Функция добавления сообщения в окно чата
+        // ===== Обновление токена =====
+        async function refreshAccessToken() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/token/refresh/', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                if (!response.ok) {
+                    throw new Error('Ошибка обновления токена');
+                }
+                const data = await response.json();
+                accessToken = data.access;
+                tokenDebug.innerHTML = `Токен обновлён: истекает ${new Date(parseJwt(accessToken).exp * 1000).toLocaleTimeString()}`;
+                return accessToken;
+            } catch (error) {
+                console.error('Не удалось обновить токен:', error);
+                addSystemMessage('⚠️ Ошибка аутентификации. Возможно, потребуется войти заново.');
+                return null;
+            }
+        }
+
+        function startTokenRefreshTimer() {
+            const payload = parseJwt(accessToken);
+            if (payload && payload.exp) {
+                const expiresIn = payload.exp * 1000 - Date.now();
+                const refreshTime = expiresIn - 60000;
+                if (refreshTime > 0) {
+                    setTimeout(async () => {
+                        console.log('Обновляем токен по таймеру');
+                        const newToken = await refreshAccessToken();
+                        if (newToken) {
+                            createWebSocket();
+                        }
+                    }, refreshTime);
+                }
+            }
+        }
+
+        // ===== Добавление сообщений =====
         function addMessage(data, isOwn = false) {
             const msgDiv = document.createElement('div');
             msgDiv.className = 'message ' + (isOwn ? 'own' : 'other');
-            // data может быть от сервера (с полями message, user, timestamp) или от истории (с полями text, sender, created_at)
-            // Унифицируем: если есть поле text, значит это из истории, иначе из WebSocket
             const messageText = data.text || data.message;
             const userName = data.sender ? data.sender.username : data.user;
             const timestamp = data.created_at || data.timestamp;
-            msgDiv.innerHTML = `<strong>${userName}:</strong> ${messageText} <small style="float:right; color:#999;">${new Date(timestamp).toLocaleTimeString()}</small>`;
+            msgDiv.innerHTML = `<strong>${userName || 'Неизвестно'}:</strong> ${messageText} <small style="float:right; color:#999;">${new Date(timestamp).toLocaleTimeString()}</small>`;
             messagesEl.appendChild(msgDiv);
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
@@ -207,72 +277,67 @@
             }
         }
 
-        // Инициализация: получаем access token, затем историю, затем WebSocket
-        (async function init() {
-            roomIdSpan.textContent = ROOM_ID;
-            addSystemMessage('Получение токена...');
-            const token = await refreshAccessToken();
-            if (token) {
-                // Загружаем историю
-                await loadMessageHistory(ROOM_ID, token);
-                // Создаём WebSocket
-                createWebSocket();
-
-                // Запускаем таймер для автоматического обновления токена
-                const payload = parseJwt(token);
-                if (payload && payload.exp) {
-                    const expiresIn = payload.exp * 1000 - Date.now();
-                    const refreshTime = expiresIn - 60000; // за 1 минуту до истечения
-                    if (refreshTime > 0) {
-                        setTimeout(async () => {
-                            console.log('Обновляем токен по таймеру');
-                            const newToken = await refreshAccessToken();
-                            if (newToken) {
-                                createWebSocket(); // переподключаем с новым токеном
-                            }
-                        }, refreshTime);
-                    }
-                }
-            } else {
-                addSystemMessage('Ошибка инициализации. Проверьте refresh token.');
-            }
-        })();
-
-        // Отслеживание ввода для индикатора "печатает"
+        // ===== Обработчики ввода =====
         messageInput.addEventListener('input', () => {
             if (typingTimer) clearTimeout(typingTimer);
-
             if (!typingTimer) {
                 sendTyping('start');
             }
-
             typingTimer = setTimeout(() => {
                 sendTyping('stop');
                 typingTimer = null;
             }, TYPING_TIMEOUT);
         });
 
-        // Отправка сообщения по кнопке
         sendBtn.addEventListener('click', () => {
             if (typingTimer) {
                 clearTimeout(typingTimer);
                 typingTimer = null;
                 sendTyping('stop');
             }
-
             const text = messageInput.value.trim();
             if (text && socket && socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify({message: text}));
-                // Сразу добавляем своё сообщение в чат (чтобы не ждать эха)
                 addMessage({user: 'Я', message: text, timestamp: new Date().toISOString()}, true);
                 messageInput.value = '';
             }
         });
 
-        // Отправка по Enter
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 sendBtn.click();
+            }
+        });
+
+        // ===== Выход =====
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/logout/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                });
+                if (!response.ok) {
+                    throw new Error('Ошибка выхода');
+                }
+                // Сброс состояния
+                accessToken = null;
+                currentUserId = null;
+                if (socket) {
+                    socket.close();
+                }
+                messagesEl.innerHTML = '';
+                chatContainer.style.display = 'none';
+                loginForm.style.display = 'block';
+                loginError.textContent = '';
+                loginUsername.value = '';
+                loginPassword.value = '';
+            } catch (error) {
+                console.error('Logout error:', error);
+                addSystemMessage('⚠️ Не удалось выполнить выход');
             }
         });
     </script>
