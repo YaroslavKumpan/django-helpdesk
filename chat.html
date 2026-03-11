@@ -1,84 +1,608 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Чат поддержки (безопасная аутентификация)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Helpdesk – Управление заявками и чат</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; padding: 0 20px; }
-        #messages { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 10px; margin-bottom: 10px; }
-        .message { margin-bottom: 10px; padding: 5px; border-radius: 5px; }
-        .own { background-color: #e3f2fd; text-align: right; }
-        .other { background-color: #f1f1f1; }
-        .system { color: #666; font-style: italic; text-align: center; }
-        #typingIndicator { height: 20px; font-style: italic; color: #666; margin-bottom: 5px; }
-        input, button { padding: 8px; font-size: 16px; }
-        #messageInput { width: 70%; }
-        button { width: 25%; cursor: pointer; }
-        #status { margin-bottom: 10px; font-weight: bold; }
-        #tokenDebug { font-size: 12px; color: #999; margin-top: 10px; word-break: break-all; }
-        #loginForm { border: 1px solid #ccc; padding: 20px; margin-bottom: 20px; border-radius: 5px; }
-        #loginForm input { width: 100%; margin-bottom: 10px; box-sizing: border-box; }
-        #loginError { color: red; margin-top: 10px; }
-        #chatContainer { display: none; }
-        #logoutBtn { padding: 4px 8px; font-size: 14px; width: auto; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f0f2f5;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 1200px;
+            height: 95vh;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Секции приложения */
+        .section {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Шапка */
+        .header {
+            background: #ffffff;
+            padding: 16px 24px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h2 {
+            font-size: 1.3rem;
+            color: #1e293b;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .user-info span {
+            font-size: 0.95rem;
+            color: #475569;
+        }
+
+        .user-info .role-badge {
+            background: #e2e8f0;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+
+        .btn-primary {
+            background: #1e88e5;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1565c0;
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #cbd5e1;
+            color: #334155;
+        }
+
+        .btn-outline:hover {
+            background: #f8fafc;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        /* Список заявок */
+        .requests-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+        }
+
+        .requests-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .requests-header h3 {
+            font-size: 1.2rem;
+            color: #1e293b;
+        }
+
+        .request-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .request-table th {
+            text-align: left;
+            padding: 12px 8px;
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 600;
+            font-size: 0.85rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .request-table td {
+            padding: 12px 8px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #1e293b;
+            cursor: pointer;
+        }
+
+        .request-table tr:hover td {
+            background: #f1f5f9;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .status-new {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-in_progress {
+            background: #fef9c3;
+            color: #854d0e;
+        }
+
+        .status-closed {
+            background: #e2e8f0;
+            color: #334155;
+        }
+
+        /* Форма создания заявки */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            width: 400px;
+            max-width: 90%;
+        }
+
+        .modal-content h4 {
+            margin-bottom: 16px;
+        }
+
+        .modal-content input,
+        .modal-content textarea {
+            width: 100%;
+            padding: 10px 12px;
+            margin-bottom: 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        /* Чат */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .chat-header {
+            background: #ffffff;
+            padding: 16px 24px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: #1e88e5;
+            font-size: 0.95rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .back-btn:hover {
+            text-decoration: underline;
+        }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: #f8fafc;
+        }
+
+        .date-divider {
+            text-align: center;
+            margin: 16px 0 8px;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            position: relative;
+        }
+
+        .date-divider::before,
+        .date-divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 30%;
+            height: 1px;
+            background: #e2e8f0;
+        }
+
+        .date-divider::before { left: 0; }
+        .date-divider::after { right: 0; }
+
+        .message-wrapper {
+            display: flex;
+            margin-bottom: 4px;
+        }
+
+        .own-wrapper {
+            justify-content: flex-end;
+        }
+
+        .message {
+            max-width: 70%;
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .own .message {
+            flex-direction: row-reverse;
+        }
+
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .bubble {
+            background: white;
+            padding: 10px 14px;
+            border-radius: 18px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            word-break: break-word;
+        }
+
+        .own .bubble {
+            background: #e3f2fd;
+            border-bottom-right-radius: 4px;
+        }
+
+        .other .bubble {
+            background: white;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message-info {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 2px;
+        }
+
+        .message-author {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #1e293b;
+        }
+
+        .message-time {
+            font-size: 0.7rem;
+            color: #94a3b8;
+        }
+
+        .message-text {
+            font-size: 0.95rem;
+            color: #0f172a;
+            line-height: 1.4;
+        }
+
+        .system {
+            text-align: center;
+            color: #94a3b8;
+            font-size: 0.8rem;
+            margin: 12px 0;
+        }
+
+        #typingIndicator {
+            padding: 8px 20px;
+            font-style: italic;
+            color: #64748b;
+            font-size: 0.9rem;
+            min-height: 32px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        #inputContainer {
+            display: flex;
+            padding: 16px 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            gap: 8px;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 24px;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        #messageInput:focus {
+            border-color: #90caf9;
+        }
+
+        #sendBtn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: #1e88e5;
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #sendBtn:hover:not(:disabled) {
+            background: #1565c0;
+        }
+
+        #sendBtn:disabled {
+            background: #b0bec5;
+            cursor: not-allowed;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            #app {
+                max-width: 100%;
+                height: 100vh;
+                border-radius: 0;
+            }
+        }
+        #newRequestDescription {
+            resize: none;
+        }
+        .modal-content textarea {
+            resize: none;
+        }
+        #newRequestDescription {
+            resize: none !important;
+        }
     </style>
 </head>
 <body>
-    <h2>Чат поддержки</h2>
-
-    <!-- Форма логина (изначально видна) -->
-    <div id="loginForm">
-        <h3>Вход в чат</h3>
-        <input type="text" id="loginUsername" placeholder="Имя пользователя" autocomplete="off">
-        <input type="password" id="loginPassword" placeholder="Пароль">
-        <button id="loginBtn">Войти</button>
-        <div id="loginError"></div>
-    </div>
-
-    <!-- Контейнер чата (скрыт до успешного входа) -->
-    <div id="chatContainer">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>Заявка #<span id="roomIdSpan">?</span></div>
-            <button id="logoutBtn">Выйти</button>
+    <div id="app">
+        <!-- Секция авторизации -->
+        <div id="authSection" class="section">
+            <div class="header">
+                <h2>Helpdesk</h2>
+            </div>
+            <div style="flex:1; display: flex; align-items: center; justify-content: center;">
+                <!-- Контейнер для форм -->
+                <div style="width: 400px; max-width: 90%; background: white; border-radius: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); padding: 32px;">
+                    <!-- Форма входа -->
+                    <div id="loginForm">
+                        <h3 style="margin-bottom: 24px; text-align: center;">Вход</h3>
+                        <input type="text" id="loginUsername" placeholder="Имя пользователя" style="width: 100%; padding: 12px; margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                        <input type="password" id="loginPassword" placeholder="Пароль" style="width: 100%; padding: 12px; margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                        <button id="loginBtn" style="width: 100%; padding: 12px; background: #1e88e5; color: white; border: none; border-radius: 12px; font-size: 1rem; cursor: pointer;">Войти</button>
+                        <div id="loginError" style="color: #d32f2f; margin-top: 12px; text-align: center;"></div>
+                        <div style="text-align: center; margin-top: 16px;">
+                            <span id="switchToRegister" style="color: #1e88e5; cursor: pointer;">Нет аккаунта? Зарегистрироваться</span>
+                        </div>
+                    </div>
+                    <!-- Форма регистрации (скрыта) -->
+                    <div id="registerForm" style="display: none;">
+                        <h3 style="margin-bottom: 24px; text-align: center;">Регистрация</h3>
+                        <input type="text" id="regUsername" placeholder="Имя пользователя" style="width: 100%; padding: 12px; margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                        <input type="email" id="regEmail" placeholder="Email" style="width: 100%; padding: 12px; margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                        <input type="password" id="regPassword" placeholder="Пароль" style="width: 100%; padding: 12px; margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                        <input type="password" id="regPassword2" placeholder="Повторите пароль" style="width: 100%; padding: 12px; margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                        <button id="registerBtn" style="width: 100%; padding: 12px; background: #1e88e5; color: white; border: none; border-radius: 12px; font-size: 1rem; cursor: pointer;">Зарегистрироваться</button>
+                        <div id="registerError" style="color: #d32f2f; margin-top: 12px; text-align: center;"></div>
+                        <div style="text-align: center; margin-top: 16px;">
+                            <span id="switchToLogin" style="color: #1e88e5; cursor: pointer;">Уже есть аккаунт? Войти</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div id="status">🔴 Отключено</div>
-        <div id="messages"></div>
-        <div id="typingIndicator"></div>
-        <input type="text" id="messageInput" placeholder="Введите сообщение..." disabled>
-        <button id="sendBtn" disabled>Отправить</button>
-        <div id="tokenDebug"></div>
+
+        <!-- Секция управления заявками (появляется после входа) -->
+        <div id="requestsSection" class="section hidden">
+            <div class="header">
+                <h2>Заявки</h2>
+                <div class="user-info">
+                    <span id="userDisplay"></span>
+                    <span id="roleDisplay" class="role-badge"></span>
+                    <button id="logoutBtn" class="btn btn-secondary">Выйти</button>
+                </div>
+            </div>
+            <div class="requests-container">
+                <div class="requests-header">
+                    <h3>Список заявок</h3>
+                    <button id="createRequestBtn" class="btn btn-primary">+ Создать заявку</button>
+                </div>
+                <table class="request-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Заголовок</th>
+                            <th>Статус</th>
+                            <th>Создана</th>
+                            <th>Автор</th>
+                        </tr>
+                    </thead>
+                    <tbody id="requestsTableBody">
+                        <!-- будут подгружены заявки -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Модальное окно создания заявки -->
+        <div id="createRequestModal" class="modal hidden" onclick="if(event.target===this) this.classList.add('hidden')">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <h4>Новая заявка</h4>
+                <input type="text" id="newRequestTitle" placeholder="Заголовок">
+                <textarea id="newRequestDescription" placeholder="Описание" rows="3"></textarea>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" onclick="document.getElementById('createRequestModal').classList.add('hidden')">Отмена</button>
+                    <button class="btn btn-primary" id="submitNewRequest">Создать</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Секция чата (открывается при клике на заявку) -->
+        <div id="chatSection" class="section hidden">
+            <div class="chat-header">
+                <button id="backToRequestsBtn" class="back-btn">← К списку заявок</button>
+                <div class="user-info">
+                    <span id="chatRoomInfo">Заявка #<span id="chatRoomId"></span>: <span id="chatRequestTitle"></span></span>
+                    <button id="chatLogoutBtn" class="btn btn-secondary">Выйти</button>
+                </div>
+            </div>
+            <div id="status">🔴 Отключено</div>
+            <div id="messages"></div>
+            <div id="typingIndicator"></div>
+            <div id="inputContainer">
+                <input type="text" id="messageInput" placeholder="Введите сообщение..." disabled>
+                <button id="sendBtn" disabled>➤</button>
+            </div>
+        </div>
     </div>
 
     <script>
-        // Элементы DOM
-        const loginForm = document.getElementById('loginForm');
-        const loginUsername = document.getElementById('loginUsername');
-        const loginPassword = document.getElementById('loginPassword');
-        const loginBtn = document.getElementById('loginBtn');
-        const loginError = document.getElementById('loginError');
-        const chatContainer = document.getElementById('chatContainer');
-        const logoutBtn = document.getElementById('logoutBtn');
-        const statusEl = document.getElementById('status');
-        const messagesEl = document.getElementById('messages');
-        const messageInput = document.getElementById('messageInput');
-        const sendBtn = document.getElementById('sendBtn');
-        const roomIdSpan = document.getElementById('roomIdSpan');
-        const typingIndicator = document.getElementById('typingIndicator');
-        const tokenDebug = document.getElementById('tokenDebug');
-
-        // Константы
-        const ROOM_ID = 18; // ID заявки
-
-        // Состояние
+        // ========== Состояние приложения ==========
         let accessToken = null;
-        let currentUserId = null;
+        let currentUser = null; // { id, username, role, is_support }
+        let currentRequestId = null; // ID текущей открытой заявки
+
+        // WebSocket
         let socket = null;
         let reconnectAttempts = 0;
         const MAX_RECONNECT_ATTEMPTS = 5;
         let typingTimer;
         const TYPING_TIMEOUT = 1000;
+        let lastMessageDate = null;
 
-        // ===== Утилиты =====
+        // DOM элементы
+        const authSection = document.getElementById('authSection');
+        const requestsSection = document.getElementById('requestsSection');
+        const chatSection = document.getElementById('chatSection');
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const switchToRegister = document.getElementById('switchToRegister');
+        const switchToLogin = document.getElementById('switchToLogin');
+        const userDisplay = document.getElementById('userDisplay');
+        const roleDisplay = document.getElementById('roleDisplay');
+        const requestsTableBody = document.getElementById('requestsTableBody');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const chatLogoutBtn = document.getElementById('chatLogoutBtn');
+        const backToRequestsBtn = document.getElementById('backToRequestsBtn');
+        const createRequestBtn = document.getElementById('createRequestBtn');
+        const createRequestModal = document.getElementById('createRequestModal');
+        const submitNewRequest = document.getElementById('submitNewRequest');
+        const newRequestTitle = document.getElementById('newRequestTitle');
+        const newRequestDescription = document.getElementById('newRequestDescription');
+        const chatRoomIdSpan = document.getElementById('chatRoomId');
+        const statusEl = document.getElementById('status');
+        const messagesEl = document.getElementById('messages');
+        const typingIndicator = document.getElementById('typingIndicator');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // ========== Переключение форм авторизации ==========
+        switchToRegister.addEventListener('click', () => {
+            loginForm.style.display = 'none';
+            registerForm.style.display = 'block';
+            document.getElementById('loginError').textContent = '';
+        });
+        switchToLogin.addEventListener('click', () => {
+            registerForm.style.display = 'none';
+            loginForm.style.display = 'block';
+            document.getElementById('registerError').textContent = '';
+        });
+
+        // ========== Вспомогательные функции ==========
         function parseJwt(token) {
             try {
                 const base64Url = token.split('.')[1];
@@ -92,7 +616,25 @@
             }
         }
 
-        // ===== Логин =====
+        function stringToColor(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const hue = Math.abs(hash % 360);
+            return `hsl(${hue}, 70%, 50%)`;
+        }
+
+        function formatDate(date) {
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            if (date.toDateString() === today.toDateString()) return 'Сегодня';
+            if (date.toDateString() === yesterday.toDateString()) return 'Вчера';
+            return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+        }
+
+        // ========== API вызовы ==========
         async function login(username, password) {
             try {
                 const response = await fetch('http://127.0.0.1:8000/api/login/', {
@@ -102,12 +644,19 @@
                     credentials: 'include'
                 });
                 if (!response.ok) {
-                    const errData = await response.json();
-                    throw new Error(errData.detail || 'Ошибка входа');
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Ошибка входа');
                 }
                 const data = await response.json();
                 accessToken = data.access;
-                currentUserId = parseJwt(accessToken).user_id;
+                const payload = parseJwt(accessToken);
+                currentUser = {
+                    id: payload.user_id,
+                    username: username,
+                    role: 'user' // пока неизвестно, обновим позже через профиль
+                };
+                // Загрузим профиль, чтобы узнать роль
+                await loadUserProfile();
                 return true;
             } catch (error) {
                 console.error('Login error:', error);
@@ -115,27 +664,236 @@
             }
         }
 
-        loginBtn.addEventListener('click', async () => {
-            const username = loginUsername.value.trim();
-            const password = loginPassword.value;
+        async function loadUserProfile() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/profile/', {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser.profile_id = data.id;
+                    currentUser.role = data.role;
+                    currentUser.is_support = data.is_support;
+                }
+            } catch (e) {
+                console.warn('Не удалось загрузить профиль');
+            }
+        }
+
+        async function register(username, email, password, password2) {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/register/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password, password2 })
+                });
+                if (!response.ok) {
+                    const err = await response.json();
+                    let errorMsg = '';
+                    if (typeof err === 'object') {
+                        errorMsg = Object.values(err).flat().join(' ');
+                    } else {
+                        errorMsg = err.detail || 'Ошибка регистрации';
+                    }
+                    throw new Error(errorMsg);
+                }
+                // После успешной регистрации логинимся автоматически
+                return await login(username, password);
+            } catch (error) {
+                console.error('Register error:', error);
+                throw error;
+            }
+        }
+
+        // ========== Управление секциями ==========
+        function showRequestsSection() {
+            authSection.classList.add('hidden');
+            requestsSection.classList.remove('hidden');
+            chatSection.classList.add('hidden');
+            updateUserInfo();
+            loadRequests();
+        }
+
+        function showChatSection(requestId) {
+            currentRequestId = requestId;
+            authSection.classList.add('hidden');
+            requestsSection.classList.add('hidden');
+            chatSection.classList.remove('hidden');
+            chatRoomIdSpan.textContent = requestId;
+            // Очищаем сообщения
+            messagesEl.innerHTML = '';
+            lastMessageDate = null;
+            // Подключаемся к чату
+            loadRequestDetails(requestId);
+            loadMessageHistory(requestId, accessToken);
+            createWebSocket();
+        }
+
+        function updateUserInfo() {
+            userDisplay.textContent = currentUser.username;
+            roleDisplay.textContent = currentUser.role === 'admin' ? 'Администратор' :
+                                       currentUser.role === 'support' ? 'Поддержка' : 'Пользователь';
+        }
+
+        // ========== Загрузка заявок ==========
+        async function loadRequests() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/requests/', {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!response.ok) throw new Error('Ошибка загрузки заявок');
+                const requests = await response.json();
+                renderRequests(requests);
+            } catch (error) {
+                console.error('loadRequests error:', error);
+                alert('Не удалось загрузить заявки');
+            }
+        }
+
+        function renderRequests(requests) {
+            requestsTableBody.innerHTML = '';
+            requests.forEach(req => {
+                const row = document.createElement('tr');
+                row.setAttribute('data-request-id', req.id);
+                row.style.cursor = 'pointer';
+                row.addEventListener('click', () => showChatSection(req.id));
+
+                const statusClass = req.status === 'new' ? 'status-new' :
+                                    req.status === 'in_progress' ? 'status-in_progress' : 'status-closed';
+                const statusText = req.status === 'new' ? 'Новая' :
+                                   req.status === 'in_progress' ? 'В работе' : 'Закрыта';
+
+                row.innerHTML = `
+                    <td>${req.id}</td>
+                    <td>${req.title}</td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td>${new Date(req.created_at).toLocaleDateString()}</td>
+                    <td>${req.user?.username || 'Неизвестно'}</td>
+                `;
+                requestsTableBody.appendChild(row);
+            });
+        }
+
+        // ========== Создание заявки ==========
+        createRequestBtn.addEventListener('click', () => {
+            newRequestTitle.value = '';
+            newRequestDescription.value = '';
+            createRequestModal.classList.remove('hidden');
+        });
+
+        submitNewRequest.addEventListener('click', async () => {
+            const title = newRequestTitle.value.trim();
+            const description = newRequestDescription.value.trim();
+            if (!title) {
+                alert('Заголовок обязателен');
+                return;
+            }
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/requests/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ title, description })
+                });
+                if (!response.ok) throw new Error('Ошибка создания заявки');
+                const newRequest = await response.json();
+                createRequestModal.classList.add('hidden');
+                // Обновляем список заявок
+                loadRequests();
+                // Можно сразу открыть новую заявку в чате
+                showChatSection(newRequest.id);
+            } catch (error) {
+                console.error('Create request error:', error);
+                alert('Не удалось создать заявку');
+            }
+        });
+
+        // ========== Выход ==========
+        async function logout() {
+            try {
+                await fetch('http://127.0.0.1:8000/api/logout/', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}` },
+                    credentials: 'include'
+                });
+            } catch (e) {
+                console.warn('Logout error', e);
+            } finally {
+                if (socket) socket.close();
+                accessToken = null;
+                currentUser = null;
+                currentRequestId = null;
+                // Возврат к форме входа
+                authSection.classList.remove('hidden');
+                requestsSection.classList.add('hidden');
+                chatSection.classList.add('hidden');
+                // Сброс форм
+                document.getElementById('loginUsername').value = '';
+                document.getElementById('loginPassword').value = '';
+                document.getElementById('regUsername').value = '';
+                document.getElementById('regEmail').value = '';
+                document.getElementById('regPassword').value = '';
+                document.getElementById('regPassword2').value = '';
+                loginForm.style.display = 'block';
+                registerForm.style.display = 'none';
+            }
+        }
+
+        logoutBtn.addEventListener('click', logout);
+        chatLogoutBtn.addEventListener('click', logout);
+
+        backToRequestsBtn.addEventListener('click', () => {
+            if (socket) socket.close();
+            socket = null;
+            showRequestsSection();
+        });
+
+        // ========== Обработчики авторизации ==========
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
             if (!username || !password) {
-                loginError.textContent = 'Заполните оба поля';
+                document.getElementById('loginError').textContent = 'Заполните оба поля';
                 return;
             }
             const success = await login(username, password);
             if (success) {
-                loginForm.style.display = 'none';
-                chatContainer.style.display = 'block';
-                roomIdSpan.textContent = ROOM_ID;
-                await loadMessageHistory(ROOM_ID, accessToken);
-                createWebSocket();
-                startTokenRefreshTimer();
+                showRequestsSection();
+                startTokenRefreshTimer(); // запускаем таймер обновления
             } else {
-                loginError.textContent = 'Неверные данные или ошибка сервера';
+                document.getElementById('loginError').textContent = 'Неверные данные или ошибка сервера';
             }
         });
 
-        // ===== Загрузка истории =====
+        document.getElementById('registerBtn').addEventListener('click', async () => {
+            const username = document.getElementById('regUsername').value.trim();
+            const email = document.getElementById('regEmail').value.trim();
+            const password = document.getElementById('regPassword').value;
+            const password2 = document.getElementById('regPassword2').value;
+            if (!username || !email || !password || !password2) {
+                document.getElementById('registerError').textContent = 'Заполните все поля';
+                return;
+            }
+            if (password !== password2) {
+                document.getElementById('registerError').textContent = 'Пароли не совпадают';
+                return;
+            }
+            try {
+                const success = await register(username, email, password, password2);
+                if (success) {
+                    showRequestsSection();
+                    startTokenRefreshTimer();
+                } else {
+                    document.getElementById('registerError').textContent = 'Ошибка регистрации';
+                }
+            } catch (err) {
+                document.getElementById('registerError').textContent = err.message;
+            }
+        });
+
+        // ========== Функции чата ==========
         async function loadMessageHistory(requestId, token) {
             try {
                 const response = await fetch(`http://127.0.0.1:8000/api/requests/${requestId}/messages/`, {
@@ -144,7 +902,7 @@
                 if (!response.ok) throw new Error('Ошибка загрузки истории');
                 const messages = await response.json();
                 messages.reverse().forEach(msg => {
-                    const isOwn = msg.sender.id === currentUserId;
+                    const isOwn = msg.sender.id === currentUser.profile_id;
                     addMessage(msg, isOwn);
                 });
             } catch (error) {
@@ -153,7 +911,20 @@
             }
         }
 
-        // ===== WebSocket =====
+        async function loadRequestDetails(requestId) {
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/requests/${requestId}/`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!response.ok) throw new Error('Не удалось загрузить данные заявки');
+                const requestData = await response.json();
+                document.getElementById('chatRequestTitle').textContent = requestData.title;
+            } catch (error) {
+                console.error('Ошибка загрузки заголовка заявки:', error);
+                document.getElementById('chatRequestTitle').textContent = '[Заголовок не найден]';
+            }
+        }
+
         function createWebSocket() {
             if (!accessToken) {
                 console.error('Нет access токена');
@@ -162,7 +933,7 @@
             if (socket) {
                 socket.close();
             }
-            const wsUrl = `ws://127.0.0.1:8000/ws/chat/${ROOM_ID}/?token=${accessToken}`;
+            const wsUrl = `ws://127.0.0.1:8000/ws/chat/${currentRequestId}/?token=${accessToken}`;
             socket = new WebSocket(wsUrl);
 
             socket.onopen = () => {
@@ -211,7 +982,6 @@
             };
         }
 
-        // ===== Обновление токена =====
         async function refreshAccessToken() {
             try {
                 const response = await fetch('http://127.0.0.1:8000/api/token/refresh/', {
@@ -225,7 +995,6 @@
                 }
                 const data = await response.json();
                 accessToken = data.access;
-                tokenDebug.innerHTML = `Токен обновлён: истекает ${new Date(parseJwt(accessToken).exp * 1000).toLocaleTimeString()}`;
                 return accessToken;
             } catch (error) {
                 console.error('Не удалось обновить токен:', error);
@@ -251,33 +1020,13 @@
             }
         }
 
-        // ===== Добавление сообщений =====
-        function addMessage(data, isOwn = false) {
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'message ' + (isOwn ? 'own' : 'other');
-            const messageText = data.text || data.message;
-            const userName = data.sender ? data.sender.username : data.user;
-            const timestamp = data.created_at || data.timestamp;
-            msgDiv.innerHTML = `<strong>${userName || 'Неизвестно'}:</strong> ${messageText} <small style="float:right; color:#999;">${new Date(timestamp).toLocaleTimeString()}</small>`;
-            messagesEl.appendChild(msgDiv);
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-        }
-
-        function addSystemMessage(text) {
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'system';
-            msgDiv.textContent = text;
-            messagesEl.appendChild(msgDiv);
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-        }
-
         function sendTyping(status) {
             if (socket && socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify({type: 'typing', status: status}));
             }
         }
 
-        // ===== Обработчики ввода =====
+        // ===== Обработчики ввода сообщений =====
         messageInput.addEventListener('input', () => {
             if (typingTimer) clearTimeout(typingTimer);
             if (!typingTimer) {
@@ -309,37 +1058,49 @@
             }
         });
 
-        // ===== Выход =====
-        logoutBtn.addEventListener('click', async () => {
-            try {
-                const response = await fetch('http://127.0.0.1:8000/api/logout/', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include'
-                });
-                if (!response.ok) {
-                    throw new Error('Ошибка выхода');
-                }
-                // Сброс состояния
-                accessToken = null;
-                currentUserId = null;
-                if (socket) {
-                    socket.close();
-                }
-                messagesEl.innerHTML = '';
-                chatContainer.style.display = 'none';
-                loginForm.style.display = 'block';
-                loginError.textContent = '';
-                loginUsername.value = '';
-                loginPassword.value = '';
-            } catch (error) {
-                console.error('Logout error:', error);
-                addSystemMessage('⚠️ Не удалось выполнить выход');
+        // ===== Добавление сообщений =====
+        function addMessage(data, isOwn = false) {
+            const messageDate = new Date(data.timestamp || data.created_at);
+            const dateStr = messageDate.toDateString();
+            if (lastMessageDate !== dateStr) {
+                const divider = document.createElement('div');
+                divider.className = 'date-divider';
+                divider.textContent = formatDate(messageDate);
+                messagesEl.appendChild(divider);
+                lastMessageDate = dateStr;
             }
-        });
+
+            const wrapper = document.createElement('div');
+            wrapper.className = `message-wrapper ${isOwn ? 'own-wrapper' : ''}`;
+
+            const avatarColor = stringToColor(data.sender?.username || data.user || 'Anonymous');
+            const avatarLetter = (data.sender?.username || data.user || '?').charAt(0).toUpperCase();
+
+            const time = messageDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+            wrapper.innerHTML = `
+                <div class="message ${isOwn ? 'own' : 'other'}">
+                    <div class="avatar" style="background: ${avatarColor};">${avatarLetter}</div>
+                    <div class="bubble">
+                        <div class="message-info">
+                            <span class="message-author">${data.sender?.username || data.user || 'Неизвестно'}</span>
+                            <span class="message-time">${time}</span>
+                        </div>
+                        <div class="message-text">${data.text || data.message}</div>
+                    </div>
+                </div>
+            `;
+            messagesEl.appendChild(wrapper);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function addSystemMessage(text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'system';
+            msgDiv.textContent = text;
+            messagesEl.appendChild(msgDiv);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
     </script>
 </body>
 </html>

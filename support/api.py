@@ -11,9 +11,13 @@ from rest_framework.views import APIView
 
 from .models import SupportRequest, SupportMessage
 from .permissions import IsAuthorOrSupport
-from .serializers import UserRegistrationSerializer, UserLoginSerializer, SupportRequestSerializer, \
-    SupportMessageSerializer
-
+from .serializers import (
+    UserRegistrationSerializer,
+    UserLoginSerializer,
+    SupportRequestSerializer,
+    SupportMessageSerializer,
+    UserProfileSerializer,
+)
 
 @extend_schema(
     request=UserRegistrationSerializer,
@@ -158,3 +162,11 @@ class LogoutView(APIView):
         # Удаляем cookie с refresh token
         response.delete_cookie(settings.SIMPLE_JWT.get('AUTH_COOKIE'))
         return response
+
+
+class CurrentUserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserProfileSerializer(request.user.profile)
+        return Response(serializer.data)

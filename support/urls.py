@@ -7,6 +7,7 @@ from .api import (
     UserRegistrationView,
     SupportRequestViewSet,
     LogoutView,
+    CurrentUserProfileView,
 )
 
 router = DefaultRouter()
@@ -17,6 +18,7 @@ urlpatterns = [
     path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('logout/', LogoutView.as_view(), name='logout'),
+    path('profile/', CurrentUserProfileView.as_view(), name='current-profile'),
 ]
 
 urlpatterns += router.urls
