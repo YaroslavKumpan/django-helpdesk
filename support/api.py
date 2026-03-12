@@ -4,12 +4,11 @@ from rest_framework import status
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import SupportRequest, SupportMessage
+from .models import SupportRequest
 from .permissions import IsAuthorOrSupport
 from .serializers import (
     UserRegistrationSerializer,
@@ -18,6 +17,7 @@ from .serializers import (
     SupportMessageSerializer,
     UserProfileSerializer,
 )
+
 
 @extend_schema(
     request=UserRegistrationSerializer,
@@ -149,6 +149,21 @@ class SupportRequestViewSet(viewsets.ModelViewSet):
             messages, many=True, context={"request": request}
         )
         return Response(serializer.data)
+
+    @action(
+        detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
+    )
+    def mark_read(self, request, pk=None):
+        """
+        Помечает все сообщения в заявке, кроме отправленных текущим пользователем,
+        как прочитанные.
+        """
+        support_request = self.get_object()
+        user = request.user
+        messages = support_request.messages.exclude(sender=user).filter(read=False)
+        count = messages.update(read=True)
+        return Response({"marked_count": count})
+
 
 class LogoutView(APIView):
     """
