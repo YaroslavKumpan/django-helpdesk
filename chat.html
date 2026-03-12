@@ -535,10 +535,20 @@
         <div id="chatSection" class="section hidden">
             <div class="chat-header">
                 <button id="backToRequestsBtn" class="back-btn">← К списку заявок</button>
-                <div class="user-info">
+                <div style="display: flex; align-items: center; gap: 16px;">
                     <span id="chatRoomInfo">Заявка #<span id="chatRoomId"></span>: <span id="chatRequestTitle"></span></span>
-                    <button id="chatLogoutBtn" class="btn btn-secondary">Выйти</button>
+                    <!-- Блок управления статусом (будет показан только для поддержки/админа) -->
+                    <div id="statusControl" style="display: none;">
+                        <span>Статус: <span id="currentStatusDisplay">Новая</span></span>
+                        <select id="statusSelect" style="margin-left: 8px; padding: 4px; border-radius: 4px;">
+                            <option value="new">Новая</option>
+                            <option value="in_progress">В работе</option>
+                            <option value="closed">Закрыта</option>
+                        </select>
+                        <button id="changeStatusBtn" class="btn btn-secondary" style="margin-left: 8px;">Изменить</button>
+                    </div>
                 </div>
+                <button id="chatLogoutBtn" class="btn btn-secondary">Выйти</button>
             </div>
             <div id="status">🔴 Отключено</div>
             <div id="messages"></div>
@@ -548,11 +558,11 @@
                 <button id="sendBtn" disabled>➤</button>
             </div>
         </div>
-    </div>
 
     <script>
         // ========== Состояние приложения ==========
         let accessToken = null;
+        let currentRequestStatus = 'new'; // текущий статус открытой заявки
         let currentUser = null; // { id, username, role, is_support }
         let currentRequestId = null; // ID текущей открытой заявки
 
@@ -714,19 +724,40 @@
             loadRequests();
         }
 
-        function showChatSection(requestId) {
+         async function showChatSection(requestId) {
             currentRequestId = requestId;
             authSection.classList.add('hidden');
             requestsSection.classList.add('hidden');
             chatSection.classList.remove('hidden');
             chatRoomIdSpan.textContent = requestId;
-            // Очищаем сообщения
             messagesEl.innerHTML = '';
             lastMessageDate = null;
-            // Подключаемся к чату
-            loadRequestDetails(requestId);
-            loadMessageHistory(requestId, accessToken);
-            createWebSocket();
+
+            loadRequestDetails(requestId);                // загружаем заголовок (не ждём)
+            await loadMessageHistory(requestId, accessToken);
+            const statusControl = document.getElementById('statusControl');
+            if (currentUser.is_support || currentUser.role === 'admin') {
+                statusControl.style.display = 'inline-block';
+            } else {
+                statusControl.style.display = 'none';
+            }
+            await markMessagesAsRead(requestId);           // после истории помечаем прочитанными
+            createWebSocket();                             // запускаем WebSocket
+        }
+
+        // Выносим функцию наружу, чтобы не создавать каждый раз
+        async function markMessagesAsRead(requestId) {
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/requests/${requestId}/mark_read/`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!response.ok) {
+                    console.warn('Ошибка при отметке прочитанных');
+                }
+            } catch (e) {
+                console.warn('Не удалось отметить прочитанные:', e);
+            }
         }
 
         function updateUserInfo() {
@@ -919,6 +950,19 @@
                 if (!response.ok) throw new Error('Не удалось загрузить данные заявки');
                 const requestData = await response.json();
                 document.getElementById('chatRequestTitle').textContent = requestData.title;
+
+                // Сохраняем статус и обновляем отображение
+                currentRequestStatus = requestData.status;
+                const statusDisplay = document.getElementById('currentStatusDisplay');
+                if (statusDisplay) {
+                    statusDisplay.textContent =
+                        requestData.status === 'new' ? 'Новая' :
+                        requestData.status === 'in_progress' ? 'В работе' : 'Закрыта';
+                }
+                const statusSelect = document.getElementById('statusSelect');
+                if (statusSelect) {
+                    statusSelect.value = requestData.status;
+                }
             } catch (error) {
                 console.error('Ошибка загрузки заголовка заявки:', error);
                 document.getElementById('chatRequestTitle').textContent = '[Заголовок не найден]';
@@ -1077,14 +1121,18 @@
             const avatarLetter = (data.sender?.username || data.user || '?').charAt(0).toUpperCase();
 
             const time = messageDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-
+            let readStatus = '';
+            if (isOwn) {
+                readStatus = data.read ? ' ✓✓' : ' ✓'; // две галочки для прочитанных, одна для отправленных
+            }
+            const timeWithStatus = time + readStatus;
             wrapper.innerHTML = `
                 <div class="message ${isOwn ? 'own' : 'other'}">
                     <div class="avatar" style="background: ${avatarColor};">${avatarLetter}</div>
                     <div class="bubble">
                         <div class="message-info">
                             <span class="message-author">${data.sender?.username || data.user || 'Неизвестно'}</span>
-                            <span class="message-time">${time}</span>
+                            <span class="message-time">${timeWithStatus}</span>
                         </div>
                         <div class="message-text">${data.text || data.message}</div>
                     </div>
@@ -1101,6 +1149,44 @@
             messagesEl.appendChild(msgDiv);
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
+        // Изменение статуса заявки
+        document.getElementById('changeStatusBtn').addEventListener('click', async () => {
+            const newStatus = document.getElementById('statusSelect').value;
+            if (newStatus === currentRequestStatus) return; // ничего не меняем
+
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/requests/${currentRequestId}/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                if (!response.ok) throw new Error('Ошибка изменения статуса');
+                const updated = await response.json();
+                currentRequestStatus = updated.status;
+
+                // Обновляем отображение
+                document.getElementById('currentStatusDisplay').textContent =
+                    updated.status === 'new' ? 'Новая' :
+                    updated.status === 'in_progress' ? 'В работе' : 'Закрыта';
+                document.getElementById('statusSelect').value = updated.status;
+
+                // Показываем системное сообщение (если есть такая функция)
+                if (typeof addSystemMessage === 'function') {
+                    addSystemMessage('Статус заявки обновлён');
+                }
+
+                // Обновить список заявок, чтобы статус изменился в таблице
+                if (typeof loadRequests === 'function') {
+                    loadRequests();
+                }
+            } catch (error) {
+                console.error('Error changing status:', error);
+                alert('Не удалось изменить статус');
+            }
+        });
     </script>
 </body>
 </html>
